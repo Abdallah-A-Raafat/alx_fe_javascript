@@ -39,11 +39,13 @@ function getLastViewedQuote() {
 }
 
 function saveUserPreferences(category) {
+    // Save to both localStorage and sessionStorage for persistence
+    localStorage.setItem('selectedCategory', category);
     sessionStorage.setItem('selectedCategory', category);
 }
 
 function getUserPreferences() {
-    // Check both localStorage and sessionStorage for category preference
+    // Check localStorage first, then sessionStorage for category preference
     return localStorage.getItem('selectedCategory') || 
            sessionStorage.getItem('selectedCategory') || 
            'all';
@@ -52,9 +54,10 @@ function getUserPreferences() {
 // Function to display a random quote based on selected category
 function showRandomQuote() {
     const categoryFilter = document.getElementById('categoryFilter').value;
+    const quoteDisplay = document.getElementById('quoteDisplay');
     let filteredQuotes = quotes;
     
-    // Save user preference to session storage
+    // Save user preference to local storage
     saveUserPreferences(categoryFilter);
     
     // Filter quotes by category if not "all"
@@ -69,6 +72,7 @@ function showRandomQuote() {
     if (filteredQuotes.length === 0) {
         document.getElementById('quoteText').textContent = 'No quotes available in this category.';
         document.getElementById('quoteCategory').textContent = '';
+        quoteDisplay.style.opacity = '0.7';
         return;
     }
     
@@ -79,6 +83,7 @@ function showRandomQuote() {
     // Display the quote
     document.getElementById('quoteText').textContent = `"${selectedQuote.text}"`;
     document.getElementById('quoteCategory').textContent = `Category: ${selectedQuote.category}`;
+    quoteDisplay.style.opacity = '1';
     
     // Save last viewed quote to session storage
     saveLastViewedQuote(selectedQuote);
@@ -200,12 +205,38 @@ function updateCategoryCount(filteredCount, totalCount, selectedCategory) {
 
 // Function to handle category filter change
 function filterQuotes() {
-    // Update the display immediately when category changes
-    showRandomQuote();
+    const selectedCategory = document.getElementById('categoryFilter').value;
+    const quoteDisplay = document.getElementById('quoteDisplay');
     
     // Save the selected category to localStorage for persistence
-    const selectedCategory = document.getElementById('categoryFilter').value;
     localStorage.setItem('selectedCategory', selectedCategory);
+    
+    // Filter quotes based on selected category
+    let filteredQuotes = quotes;
+    if (selectedCategory !== 'all') {
+        filteredQuotes = quotes.filter(quote => quote.category === selectedCategory);
+    }
+    
+    // Update category count display
+    updateCategoryCount(filteredQuotes.length, quotes.length, selectedCategory);
+    
+    // Update the displayed quotes based on the selected category
+    if (filteredQuotes.length === 0) {
+        document.getElementById('quoteText').textContent = 'No quotes available in this category.';
+        document.getElementById('quoteCategory').textContent = '';
+        quoteDisplay.style.opacity = '0.7';
+    } else {
+        // Select and display a random quote from filtered quotes
+        const randomIndex = Math.floor(Math.random() * filteredQuotes.length);
+        const selectedQuote = filteredQuotes[randomIndex];
+        
+        document.getElementById('quoteText').textContent = `"${selectedQuote.text}"`;
+        document.getElementById('quoteCategory').textContent = `Category: ${selectedQuote.category}`;
+        quoteDisplay.style.opacity = '1';
+        
+        // Save last viewed quote to session storage
+        saveLastViewedQuote(selectedQuote);
+    }
 }
 
 // Initialize the application when the page loads
@@ -216,7 +247,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Populate initial categories
     populateCategories();
     
-    // Restore user preferences from session storage
+    // Restore user preferences from local storage
     const savedCategory = getUserPreferences();
     document.getElementById('categoryFilter').value = savedCategory;
     
@@ -233,17 +264,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('importFile').addEventListener('change', importFromJsonFile);
     document.getElementById('clearBtn').addEventListener('click', clearAllData);
     
-    // Display initial quote or last viewed quote
-    const lastViewedQuote = getLastViewedQuote();
-    if (lastViewedQuote && savedCategory !== 'all') {
-        document.getElementById('quoteText').textContent = `"${lastViewedQuote.text}"`;
-        document.getElementById('quoteCategory').textContent = `Category: ${lastViewedQuote.category}`;
-        // Update category count for the restored selection
-        const filteredQuotes = quotes.filter(q => q.category === savedCategory);
-        updateCategoryCount(filteredQuotes.length, quotes.length, savedCategory);
-    } else {
-        showRandomQuote();
-    }
+    // Display initial quote based on restored category selection
+    filterQuotes();
 });
 
 // JSON Import and Export Functions
