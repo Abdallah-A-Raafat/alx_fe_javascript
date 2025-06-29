@@ -9,6 +9,12 @@
   <body>
     <h1>Dynamic Quote Generator</h1>
     
+    <!-- Sync Status Indicator -->
+    <div class="sync-section">
+      <div id="syncStatus" class="sync-status">Checking connection...</div>
+      <button id="syncBtn" class="sync-btn">Manual Sync</button>
+    </div>
+    
     <!-- Category selection -->
     <div class="category-section">
       <label for="categoryFilter">Select Category:</label>
@@ -43,6 +49,9 @@
     
     <!-- Form container (initially hidden) -->
     <div id="addQuoteForm" class="form-container" style="display: none;"></div>
+    
+    <!-- Notification container -->
+    <div id="notification" class="notification"></div>
     
    
     

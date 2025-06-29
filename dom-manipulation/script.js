@@ -1,30 +1,53 @@
 // Array to store quotes with text and category
 let quotes = [];
+let lastSyncTimestamp = 0;
+let syncInterval = null;
+let isOnline = navigator.onLine;
 
 // Initialize quotes with default data if no local storage exists
 const defaultQuotes = [
-    { text: "The only way to do great work is to love what you do.", category: "motivation" },
-    { text: "Life is what happens to you while you're busy making other plans.", category: "life" },
-    { text: "The future belongs to those who believe in the beauty of their dreams.", category: "inspiration" },
-    { text: "It is during our darkest moments that we must focus to see the light.", category: "inspiration" },
-    { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", category: "motivation" },
-    { text: "The only impossible journey is the one you never begin.", category: "motivation" },
-    { text: "In the end, we will remember not the words of our enemies, but the silence of our friends.", category: "life" },
-    { text: "Be yourself; everyone else is already taken.", category: "inspiration" }
+    { text: "The only way to do great work is to love what you do.", category: "motivation", id: 1, timestamp: Date.now() },
+    { text: "Life is what happens to you while you're busy making other plans.", category: "life", id: 2, timestamp: Date.now() },
+    { text: "The future belongs to those who believe in the beauty of their dreams.", category: "inspiration", id: 3, timestamp: Date.now() },
+    { text: "It is during our darkest moments that we must focus to see the light.", category: "inspiration", id: 4, timestamp: Date.now() },
+    { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", category: "motivation", id: 5, timestamp: Date.now() },
+    { text: "The only impossible journey is the one you never begin.", category: "motivation", id: 6, timestamp: Date.now() },
+    { text: "In the end, we will remember not the words of our enemies, but the silence of our friends.", category: "life", id: 7, timestamp: Date.now() },
+    { text: "Be yourself; everyone else is already taken.", category: "inspiration", id: 8, timestamp: Date.now() }
 ];
+
+// Server configuration
+const SERVER_CONFIG = {
+    baseUrl: 'https://jsonplaceholder.typicode.com',
+    syncInterval: 30000, // 30 seconds
+    timeout: 5000
+};
 
 // Local Storage Functions
 function saveQuotes() {
     localStorage.setItem('quotes', JSON.stringify(quotes));
+    localStorage.setItem('lastSyncTimestamp', lastSyncTimestamp.toString());
 }
 
 function loadQuotes() {
     const savedQuotes = localStorage.getItem('quotes');
+    const savedTimestamp = localStorage.getItem('lastSyncTimestamp');
+    
     if (savedQuotes) {
         quotes = JSON.parse(savedQuotes);
+        // Ensure all quotes have required fields for syncing
+        quotes = quotes.map(quote => ({
+            ...quote,
+            id: quote.id || generateId(),
+            timestamp: quote.timestamp || Date.now()
+        }));
     } else {
         quotes = [...defaultQuotes];
         saveQuotes(); // Save default quotes to localStorage
+    }
+    
+    if (savedTimestamp) {
+        lastSyncTimestamp = parseInt(savedTimestamp);
     }
 }
 
@@ -131,10 +154,13 @@ function addQuote() {
         return;
     }
     
-    // Create new quote object
+    // Create new quote object with sync fields
     const newQuote = {
+        id: generateId(),
         text: quoteText,
-        category: quoteCategory
+        category: quoteCategory,
+        timestamp: Date.now(),
+        synced: false
     };
     
     // Add to quotes array
@@ -142,6 +168,18 @@ function addQuote() {
     
     // Save to local storage
     saveQuotes();
+    
+    // Sync with server if online
+    if (isOnline) {
+        postQuoteToServer(newQuote).then(syncedQuote => {
+            // Update the quote with sync status
+            const index = quotes.findIndex(q => q.id === newQuote.id);
+            if (index !== -1) {
+                quotes[index] = syncedQuote;
+                saveQuotes();
+            }
+        });
+    }
     
     // Update category dropdown
     populateCategories();
@@ -244,6 +282,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load quotes from local storage
     loadQuotes();
     
+    // Set up online/offline event listeners
+    window.addEventListener('online', () => {
+        isOnline = true;
+        updateOnlineStatus();
+        showNotification('Connection restored - syncing data...', 'success');
+        syncWithServer();
+    });
+    
+    window.addEventListener('offline', () => {
+        isOnline = false;
+        updateOnlineStatus();
+        showNotification('Connection lost - working offline', 'warning');
+    });
+    
+    // Initial online status check
+    updateOnlineStatus();
+    
     // Populate initial categories
     populateCategories();
     
@@ -264,8 +319,18 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('importFile').addEventListener('change', importFromJsonFile);
     document.getElementById('clearBtn').addEventListener('click', clearAllData);
     
+    // Add sync event listeners
+    document.getElementById('syncBtn')?.addEventListener('click', manualSync);
+    
     // Display initial quote based on restored category selection
     filterQuotes();
+    
+    // Start periodic sync if online
+    if (isOnline) {
+        startPeriodicSync();
+        // Initial sync
+        setTimeout(() => syncWithServer(), 2000);
+    }
 });
 
 // JSON Import and Export Functions
@@ -455,4 +520,240 @@ function restoreFromBackup() {
         return true;
     }
     return false;
+}
+
+// Server Sync and Conflict Resolution Functions
+
+// Generate unique ID for quotes
+function generateId() {
+    return Date.now() + Math.random().toString(36).substr(2, 9);
+}
+
+// Check online status
+function updateOnlineStatus() {
+    isOnline = navigator.onLine;
+    updateSyncStatus();
+}
+
+// Update sync status indicator
+function updateSyncStatus() {
+    const statusElement = document.getElementById('syncStatus');
+    if (statusElement) {
+        if (isOnline) {
+            statusElement.textContent = 'Online - Auto-sync enabled';
+            statusElement.className = 'sync-status online';
+        } else {
+            statusElement.textContent = 'Offline - Changes will sync when online';
+            statusElement.className = 'sync-status offline';
+        }
+    }
+}
+
+// Simulate fetching quotes from server
+async function fetchQuotesFromServer() {
+    try {
+        const response = await fetch(`${SERVER_CONFIG.baseUrl}/posts`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            signal: AbortSignal.timeout(SERVER_CONFIG.timeout)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const posts = await response.json();
+        
+        // Convert posts to quote format (simulation)
+        const serverQuotes = posts.slice(0, 5).map((post, index) => ({
+            id: `server_${post.id}`,
+            text: post.title,
+            category: ['motivation', 'inspiration', 'life'][index % 3],
+            timestamp: Date.now() - (index * 1000000), // Simulate different timestamps
+            source: 'server'
+        }));
+        
+        return serverQuotes;
+    } catch (error) {
+        console.error('Failed to fetch quotes from server:', error);
+        showNotification('Failed to sync with server', 'error');
+        return [];
+    }
+}
+
+// Simulate posting quotes to server
+async function postQuoteToServer(quote) {
+    try {
+        const response = await fetch(`${SERVER_CONFIG.baseUrl}/posts`, {
+            method: 'POST',
+            body: JSON.stringify({
+                title: quote.text,
+                body: quote.category,
+                userId: 1
+            }),
+            headers: {
+                'Content-Type': 'application/json; charset=UTF-8',
+            },
+            signal: AbortSignal.timeout(SERVER_CONFIG.timeout)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        return {
+            ...quote,
+            serverId: result.id,
+            synced: true
+        };
+    } catch (error) {
+        console.error('Failed to post quote to server:', error);
+        return { ...quote, synced: false };
+    }
+}
+
+// Sync local data with server
+async function syncWithServer() {
+    if (!isOnline) {
+        console.log('Offline - skipping sync');
+        return;
+    }
+    
+    showNotification('Syncing with server...', 'info');
+    
+    try {
+        // Fetch server quotes
+        const serverQuotes = await fetchQuotesFromServer();
+        
+        // Resolve conflicts and merge data
+        const mergedQuotes = resolveConflicts(quotes, serverQuotes);
+        
+        // Update local quotes if changes were made
+        if (mergedQuotes.length !== quotes.length || 
+            JSON.stringify(mergedQuotes) !== JSON.stringify(quotes)) {
+            quotes = mergedQuotes;
+            lastSyncTimestamp = Date.now();
+            saveQuotes();
+            populateCategories();
+            showNotification('Data synced successfully!', 'success');
+            
+            // Refresh display if needed
+            const currentCategory = document.getElementById('categoryFilter').value;
+            if (currentCategory !== 'all') {
+                filterQuotes();
+            } else {
+                showRandomQuote();
+            }
+        } else {
+            showNotification('No changes to sync', 'info');
+        }
+        
+    } catch (error) {
+        console.error('Sync failed:', error);
+        showNotification('Sync failed - will retry later', 'error');
+    }
+}
+
+// Conflict resolution strategy
+function resolveConflicts(localQuotes, serverQuotes) {
+    const mergedQuotes = [...localQuotes];
+    const conflicts = [];
+    
+    serverQuotes.forEach(serverQuote => {
+        const existingQuote = mergedQuotes.find(q => q.id === serverQuote.id);
+        
+        if (existingQuote) {
+            // Conflict detected - server takes precedence
+            if (serverQuote.timestamp > existingQuote.timestamp) {
+                const index = mergedQuotes.findIndex(q => q.id === serverQuote.id);
+                mergedQuotes[index] = { ...serverQuote, conflictResolved: true };
+                conflicts.push({
+                    type: 'updated',
+                    quote: serverQuote,
+                    previousQuote: existingQuote
+                });
+            }
+        } else {
+            // New quote from server
+            mergedQuotes.push({ ...serverQuote, fromServer: true });
+            conflicts.push({
+                type: 'added',
+                quote: serverQuote
+            });
+        }
+    });
+    
+    // Show conflict resolution summary
+    if (conflicts.length > 0) {
+        showConflictResolution(conflicts);
+    }
+    
+    return mergedQuotes;
+}
+
+// Show conflict resolution summary
+function showConflictResolution(conflicts) {
+    const added = conflicts.filter(c => c.type === 'added').length;
+    const updated = conflicts.filter(c => c.type === 'updated').length;
+    
+    let message = 'Sync completed: ';
+    if (added > 0) message += `${added} new quotes added`;
+    if (updated > 0) {
+        if (added > 0) message += ', ';
+        message += `${updated} quotes updated`;
+    }
+    
+    showNotification(message, 'success', 5000);
+}
+
+// Show notification to user
+function showNotification(message, type = 'info', duration = 3000) {
+    // Create notification element if it doesn't exist
+    let notification = document.getElementById('notification');
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'notification';
+        document.body.appendChild(notification);
+    }
+    
+    notification.textContent = message;
+    notification.className = `notification ${type} show`;
+    
+    // Auto-hide notification
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, duration);
+}
+
+// Start periodic sync
+function startPeriodicSync() {
+    if (syncInterval) {
+        clearInterval(syncInterval);
+    }
+    
+    syncInterval = setInterval(() => {
+        if (isOnline) {
+            syncWithServer();
+        }
+    }, SERVER_CONFIG.syncInterval);
+}
+
+// Stop periodic sync
+function stopPeriodicSync() {
+    if (syncInterval) {
+        clearInterval(syncInterval);
+        syncInterval = null;
+    }
+}
+
+// Manual sync trigger
+function manualSync() {
+    if (!isOnline) {
+        showNotification('Cannot sync while offline', 'error');
+        return;
+    }
+    syncWithServer();
 }
