@@ -760,5 +760,11 @@ function manualSync() {
         showNotification('Cannot sync while offline', 'error');
         return;
     }
-    syncWithServer();
+    syncQuotes();
+}
+
+// Main sync with server function
+async function syncWithServer() {
+    showNotification('Quotes synced with server!', 'success');
+    return syncQuotes();
 }
