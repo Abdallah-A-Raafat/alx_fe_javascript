@@ -650,7 +650,7 @@ async function syncQuotes() {
             
             lastSyncTimestamp = Date.now();
             updateSyncStatus('✓ Synced', 'success');
-            showNotification('Quotes synced with server!', 'success');
+            showNotification('Data synchronized successfully!', 'success');
         }
         
         // Sync any unsynced local quotes to server
@@ -684,14 +684,10 @@ function resolveConflicts(serverQuotes) {
                 
                 // Server takes precedence - update local quote
                 Object.assign(localQuote, serverQuote);
-                
-                // Show specific conflict resolution message
-                showNotification(`Conflict resolved for quote ID ${serverQuote.id}. Server version applied.`, 'warning');
             }
         } else {
             // New quote from server - add to local quotes
             quotes.push(serverQuote);
-            showNotification(`New quote added from server: "${serverQuote.text.substring(0, 30)}..."`, 'info');
         }
     });
     
