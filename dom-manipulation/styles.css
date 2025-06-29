@@ -101,3 +101,25 @@ body {
       #importBtn:hover {
         background: #138496;
       }
+      .category-count {
+        font-size: 0.9em;
+        color: #666;
+        margin-left: 10px;
+        font-style: italic;
+      }
+      .category-section label {
+        font-weight: bold;
+        margin-right: 10px;
+      }
+      .category-section select {
+        padding: 8px 12px;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        font-size: 16px;
+        background: white;
+        cursor: pointer;
+      }
+      .category-section select:focus {
+        outline: none;
+        border-color: #007bff;
+      }

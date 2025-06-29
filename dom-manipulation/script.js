@@ -43,7 +43,10 @@ function saveUserPreferences(category) {
 }
 
 function getUserPreferences() {
-    return sessionStorage.getItem('selectedCategory') || 'all';
+    // Check both localStorage and sessionStorage for category preference
+    return localStorage.getItem('selectedCategory') || 
+           sessionStorage.getItem('selectedCategory') || 
+           'all';
 }
 
 // Function to display a random quote based on selected category
@@ -58,6 +61,9 @@ function showRandomQuote() {
     if (categoryFilter !== 'all') {
         filteredQuotes = quotes.filter(quote => quote.category === categoryFilter);
     }
+    
+    // Update category count display
+    updateCategoryCount(filteredQuotes.length, quotes.length, categoryFilter);
     
     // If no quotes in selected category, show message
     if (filteredQuotes.length === 0) {
@@ -174,11 +180,32 @@ function populateCategories() {
     if (categories.includes(currentValue)) {
         categorySelect.value = currentValue;
     }
+    
+    // Update category count
+    const filteredQuotes = currentValue === 'all' ? quotes : quotes.filter(q => q.category === currentValue);
+    updateCategoryCount(filteredQuotes.length, quotes.length, currentValue);
+}
+
+// Function to update category count display
+function updateCategoryCount(filteredCount, totalCount, selectedCategory) {
+    const countElement = document.getElementById('categoryCount');
+    if (countElement) {
+        if (selectedCategory === 'all') {
+            countElement.textContent = `(${totalCount} total quotes)`;
+        } else {
+            countElement.textContent = `(${filteredCount} quotes in ${selectedCategory})`;
+        }
+    }
 }
 
 // Function to handle category filter change
 function filterQuotes() {
+    // Update the display immediately when category changes
     showRandomQuote();
+    
+    // Save the selected category to localStorage for persistence
+    const selectedCategory = document.getElementById('categoryFilter').value;
+    localStorage.setItem('selectedCategory', selectedCategory);
 }
 
 // Initialize the application when the page loads
@@ -211,6 +238,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (lastViewedQuote && savedCategory !== 'all') {
         document.getElementById('quoteText').textContent = `"${lastViewedQuote.text}"`;
         document.getElementById('quoteCategory').textContent = `Category: ${lastViewedQuote.category}`;
+        // Update category count for the restored selection
+        const filteredQuotes = quotes.filter(q => q.category === savedCategory);
+        updateCategoryCount(filteredQuotes.length, quotes.length, savedCategory);
     } else {
         showRandomQuote();
     }
@@ -302,6 +332,55 @@ function clearAllData() {
         showRandomQuote();
         
         alert('All data cleared and reset to default quotes!');
+    }
+}
+
+// Advanced Category Management Functions
+
+// Function to get all unique categories
+function getAllCategories() {
+    return [...new Set(quotes.map(quote => quote.category))].sort();
+}
+
+// Function to get quotes by specific category
+function getQuotesByCategory(category) {
+    if (category === 'all') {
+        return quotes;
+    }
+    return quotes.filter(quote => quote.category === category);
+}
+
+// Function to check if a category exists
+function categoryExists(category) {
+    return quotes.some(quote => quote.category === category);
+}
+
+// Function to rename a category (for future enhancement)
+function renameCategory(oldCategory, newCategory) {
+    quotes.forEach(quote => {
+        if (quote.category === oldCategory) {
+            quote.category = newCategory;
+        }
+    });
+    saveQuotes();
+    populateCategories();
+}
+
+// Function to delete all quotes in a category
+function deleteCategory(category) {
+    if (confirm(`Are you sure you want to delete all quotes in the "${category}" category?`)) {
+        quotes = quotes.filter(quote => quote.category !== category);
+        saveQuotes();
+        populateCategories();
+        
+        // Reset to "all" if current category was deleted
+        const currentCategory = document.getElementById('categoryFilter').value;
+        if (currentCategory === category) {
+            document.getElementById('categoryFilter').value = 'all';
+            showRandomQuote();
+        }
+        
+        alert(`All quotes in "${category}" category have been deleted.`);
     }
 }
 

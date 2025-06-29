@@ -12,9 +12,10 @@
     <!-- Category selection -->
     <div class="category-section">
       <label for="categoryFilter">Select Category:</label>
-      <select id="categoryFilter">
+      <select id="categoryFilter" onchange="filterQuotes()">
         <option value="all">All Categories</option>
       </select>
+      <span id="categoryCount" class="category-count"></span>
     </div>
     
     <!-- Quote display -->
